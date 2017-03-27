@@ -4,6 +4,7 @@ namespace PHPCensor\Model\Build;
 
 use PHPCensor\Model\Build;
 use PHPCensor\Builder;
+use Psr\Log\LogLevel;
 
 /**
  * Remote Git Build Model
@@ -33,12 +34,38 @@ class RemoteGitBuild extends Build
             $success = $this->cloneByHttp($builder, $buildPath);
         }
 
+        if ($success) {
+            $success = $this->mergeBranches($builder, $buildPath);
+        }
+
         if (!$success) {
             $builder->logFailure('Failed to clone remote git repository.');
             return false;
         }
 
         return $this->handleConfig($builder, $buildPath);
+    }
+
+    /**
+     * @param Builder $builder
+     * @param string $buildPath
+     * @return bool
+     */
+    protected function mergeBranches(Builder $builder, $buildPath)
+    {
+        $branches = $this->getExtra('branches');
+        if (!empty($branches)) {
+            $cmd = 'cd "%s" && git merge --quiet origin/%s';
+            foreach ($branches as $branch) {
+                $success = $builder->executeCommand($cmd, $buildPath, $branch);
+                if (!$success) {
+                    $builder->log('Fail merge branch origin/'.$branch, LogLevel::ERROR);
+                    return false;
+                }
+                $builder->log('Merged branch origin/'.$branch, LogLevel::INFO);
+            }
+        }
+        return true;
     }
 
     /**
@@ -120,49 +147,5 @@ class RemoteGitBuild extends Build
         }
 
         return $success;
-    }
-
-    /**
-     * Create an SSH key file on disk for this build.
-     * @param $cloneTo
-     * @return string
-     */
-    protected function writeSshKey($cloneTo)
-    {
-        $keyPath = dirname($cloneTo . '/temp');
-        $keyFile = $keyPath . '.key';
-
-        // Write the contents of this project's git key to the file:
-        file_put_contents($keyFile, $this->getProject()->getSshPrivateKey());
-        chmod($keyFile, 0600);
-
-        // Return the filename:
-        return $keyFile;
-    }
-
-    /**
-     * Create an SSH wrapper script for Git to use, to disable host key checking, etc.
-     * @param $cloneTo
-     * @param $keyFile
-     * @return string
-     */
-    protected function writeSshWrapper($cloneTo, $keyFile)
-    {
-        $path = dirname($cloneTo . '/temp');
-        $wrapperFile = $path . '.sh';
-
-        $sshFlags = '-o CheckHostIP=no -o IdentitiesOnly=yes -o StrictHostKeyChecking=no -o PasswordAuthentication=no';
-
-        // Write out the wrapper script for this build:
-        $script = <<<OUT
-#!/bin/sh
-ssh {$sshFlags} -o IdentityFile={$keyFile} $*
-
-OUT;
-
-        file_put_contents($wrapperFile, $script);
-        shell_exec('chmod +x "'.$wrapperFile.'"');
-
-        return $wrapperFile;
     }
 }

@@ -16,7 +16,7 @@ use PHPCensor\Service\ProjectService;
 
 /**
  * Project Controller - Allows users to create, edit and view projects.
- * 
+ *
  * @author Dan Cryer <dan@block8.co.uk>
  */
 class ProjectController extends PHPCensor\Controller
@@ -58,6 +58,7 @@ class ProjectController extends PHPCensor\Controller
     public function view($projectId)
     {
         $branch = $this->getParam('branch', '');
+        $environment = $this->getParam('environment', '');
         $project = $this->projectStore->getById($projectId);
 
         if (empty($project)) {
@@ -66,7 +67,7 @@ class ProjectController extends PHPCensor\Controller
 
         $perPage = $_SESSION['php-censor-user']->getFinalPerPage();
         $page     = $this->getParam('p', 1);
-        $builds   = $this->getLatestBuildsHtml($projectId, urldecode($branch), (($page - 1) * $perPage), $perPage);
+        $builds   = $this->getLatestBuildsHtml($projectId, urldecode($environment), urlencode($branch), (($page - 1) * $perPage), $perPage);
         $pages    = $builds[1] == 0 ? 1 : ceil($builds[1] / $perPage);
 
         if ($page > $pages) {
@@ -80,12 +81,18 @@ class ProjectController extends PHPCensor\Controller
         $this->view->project  = $project;
         $this->view->branch   = urldecode($branch);
         $this->view->branches = $this->projectStore->getKnownBranches($projectId);
+        $this->view->environment = urldecode($environment);
+        $this->view->environments = $project->getEnvironmentsNames();
         $this->view->page     = $page;
         $this->view->pages    = $pages;
         $this->view->perPage  = $perPage;
 
         $this->layout->title    = $project->getTitle();
-        $this->layout->subtitle = $this->view->branch;
+        if (!empty($this->view->environment)) {
+            $this->layout->subtitle = $this->view->environment;
+        } else {
+            $this->layout->subtitle = $this->view->branch;
+        }
 
         return $this->view->render();
     }
@@ -93,10 +100,21 @@ class ProjectController extends PHPCensor\Controller
     /**
     * Create a new pending build for a project.
     */
-    public function build($projectId, $branch = '')
+    public function build($projectId, $type = null, $id = null)
     {
         /* @var \PHPCensor\Model\Project $project */
         $project = $this->projectStore->getById($projectId);
+
+        $environment = null;
+        $branch = null;
+        switch($type) {
+            case 'environment':
+                $environment = $id;
+                break;
+            case 'branch':
+                $branch = $id;
+                break;
+        }
 
         if (empty($branch)) {
             $branch = $project->getBranch();
@@ -115,7 +133,7 @@ class ProjectController extends PHPCensor\Controller
         }
 
         $email = $_SESSION['php-censor-user']->getEmail();
-        $build = $this->buildService->createBuild($project, null, urldecode($branch), $email, null, $extra);
+        $build = $this->buildService->createBuild($project, $environment, null, urldecode($branch), $email, null, $extra);
 
         if ($this->buildService->queueError) {
             $_SESSION['global_error'] = Lang::get('add_to_queue_failed');
@@ -145,15 +163,19 @@ class ProjectController extends PHPCensor\Controller
      * Render latest builds for project as HTML table.
      *
      * @param int    $projectId
+     * @param string $environment    A urldecoded environment name.
      * @param string $branch    A urldecoded branch name.
      * @param int    $start
      * @param int    $perPage
-     * 
+     *
      * @return array
      */
-    protected function getLatestBuildsHtml($projectId, $branch = '', $start = 0, $perPage = 10)
+    protected function getLatestBuildsHtml($projectId, $environment = '', $branch = '', $start = 0, $perPage = 10)
     {
         $criteria = ['project_id' => $projectId];
+        if (!empty($environment)) {
+            $criteria['environment'] = $environment;
+        }
         if (!empty($branch)) {
             $criteria['branch'] = $branch;
         }
@@ -244,6 +266,7 @@ class ProjectController extends PHPCensor\Controller
                 'allow_public_status' => $this->getParam('allow_public_status', 0),
                 'branch'              => $this->getParam('branch', null),
                 'group'               => $this->getParam('group_id', null),
+                'environments'        => $this->getParam('environments', null),
             ];
 
             $project = $this->projectService->createProject($title, $type, $reference, $options);
@@ -275,6 +298,8 @@ class ProjectController extends PHPCensor\Controller
         $values = $project->getDataArray();
         $values['key'] = $values['ssh_private_key'];
         $values['pubkey'] = $values['ssh_public_key'];
+
+        $values['environments'] = $project->getEnvironments();
 
         if ($values['type'] == 'gitlab') {
             $accessInfo          = $project->getAccessInformation();
@@ -310,6 +335,7 @@ class ProjectController extends PHPCensor\Controller
             'archived'            => $this->getParam('archived', 0),
             'branch'              => $this->getParam('branch', null),
             'group'               => $this->getParam('group_id', null),
+            'environments'        => $this->getParam('environments', null),
         ];
 
         $project = $this->projectService->updateProject($project, $title, $type, $reference, $options);
@@ -332,19 +358,20 @@ class ProjectController extends PHPCensor\Controller
         $form->addField(new Form\Element\Hidden('pubkey'));
 
         $options = [
-            'choose'    => Lang::get('select_repository_type'),
-            'github'    => 'GitHub',
-            'bitbucket' => 'Bitbucket',
-            'gitlab'    => 'GitLab',
-            'gogs'      => 'Gogs',
-            'remote'    => 'Git',
-            'local'     => Lang::get('local'),
-            'hg'        => 'Mercurial (Hg)',
-            'svn'       => 'SVN',
+            'choose'      => Lang::get('select_repository_type'),
+            'github'      => 'GitHub',
+            'bitbucket'   => 'Bitbucket (Git)',
+            'bitbuckethg' => 'Bitbucket (Hg)',
+            'gitlab'      => 'GitLab',
+            'gogs'        => 'Gogs',
+            'remote'      => 'Git',
+            'local'       => Lang::get('local'),
+            'hg'          => 'Mercurial (Hg)',
+            'svn'         => 'SVN',
         ];
 
         $field = Form\Element\Select::create('type', Lang::get('where_hosted'), true);
-        $field->setPattern('^(github|bitbucket|gitlab|gogs|remote|local|hg|svn)');
+        $field->setPattern('^(github|bitbucket|bitbuckethg|gitlab|gogs|remote|local|hg|svn)');
         $field->setOptions($options);
         $field->setClass('form-control')->setContainerClass('form-group');
         $form->addField($field);
@@ -380,7 +407,12 @@ class ProjectController extends PHPCensor\Controller
         $field->setClass('form-control')->setContainerClass('form-group')->setValue('master');
         $form->addField($field);
 
-        $field = Form\Element\Select::create('group_id', 'Project Group', true);
+        $field = Form\Element\TextArea::create('environments', Lang::get('environments_label'), false);
+        $field->setClass('form-control')->setContainerClass('form-group');
+        $field->setRows(6);
+        $form->addField($field);
+
+        $field = Form\Element\Select::create('group_id', Lang::get('project_group'), true);
         $field->setClass('form-control')->setContainerClass('form-group')->setValue(1);
 
         $groups = [];
@@ -428,7 +460,7 @@ class ProjectController extends PHPCensor\Controller
 
             $validators = [
                 'hg' => [
-                    'regex'   => '/^(https?):\/\//',
+                    'regex'   => '/^(ssh|https?):\/\//',
                     'message' => Lang::get('error_mercurial')
                 ],
                 'remote' => [
@@ -444,6 +476,10 @@ class ProjectController extends PHPCensor\Controller
                     'message' => Lang::get('error_github')
                 ],
                 'bitbucket' => [
+                    'regex'   => '/^[a-zA-Z0-9_\-]+\/[a-zA-Z0-9_\-\.]+$/',
+                    'message' => Lang::get('error_bitbucket')
+                ],
+                'bitbuckethg' => [
                     'regex'   => '/^[a-zA-Z0-9_\-]+\/[a-zA-Z0-9_\-\.]+$/',
                     'message' => Lang::get('error_bitbucket')
                 ],
@@ -467,8 +503,9 @@ class ProjectController extends PHPCensor\Controller
     public function ajaxBuilds($projectId)
     {
         $branch  = $this->getParam('branch', '');
+        $environment  = $this->getParam('environment', '');
         $perPage = (integer)$this->getParam('per_page', 10);
-        $builds  = $this->getLatestBuildsHtml($projectId, urldecode($branch), 0, $perPage);
+        $builds  = $this->getLatestBuildsHtml($projectId, urldecode($environment), urldecode($branch), 0, $perPage);
 
         $this->response->disableLayout();
         $this->response->setContent($builds[0]);
