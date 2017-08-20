@@ -9,7 +9,6 @@ Getting Started
     * [Run builds using a worker](workers/worker.md)
     * [Run builds using cronjob](workers/cron.md)
 * [Adding PHP Censor Support to Your Projects](configuring_project.md)
-* [Setting up Logging](logging.md)
 * Updating PHP Censor (See [README](../../README.md))
 * [Configuring PHP Censor](configuring.md)
 
@@ -64,6 +63,7 @@ Plugins
 * [Shell](plugins/shell.md) - `shell`
 * [Slack](plugins/slack_notify.md) - `slack_notify`
 * [Technical Debt](plugins/technical_dept.md) - `technical_debt`
+* [Security Checker](plugins/security_checker.md) - SensioLabs Security Checker Plugin (`security_checker`).
 * [XMPP](plugins/xmpp.md) - `xmpp`
 
 ### Third-party plugins

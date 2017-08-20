@@ -46,67 +46,110 @@ class ProjectController extends PHPCensor\Controller
      */
     public function init()
     {
-        $this->buildStore = Store\Factory::getStore('Build');
-        $this->projectStore = Store\Factory::getStore('Project');
+        $this->buildStore     = Store\Factory::getStore('Build');
+        $this->projectStore   = Store\Factory::getStore('Project');
         $this->projectService = new ProjectService($this->projectStore);
-        $this->buildService = new BuildService($this->buildStore);
+        $this->buildService   = new BuildService($this->buildStore);
     }
 
     /**
-    * View a specific project.
-    */
+     * @param int $projectId
+     *
+     * @return b8\Http\Response
+     */
+    public function ajaxBuilds($projectId)
+    {
+        $branch       = $this->getParam('branch', '');
+        $environment  = $this->getParam('environment', '');
+        $page         = (integer)$this->getParam('page', 1);
+        $perPage      = (integer)$this->getParam('per_page', 10);
+        $builds       = $this->getLatestBuildsHtml($projectId, $environment, $branch, (($page - 1) * $perPage), $perPage);
+
+        $this->response->disableLayout();
+        $this->response->setContent($builds[0]);
+
+        return $this->response;
+    }
+
+    /**
+     * View a specific project.
+     * 
+     * @param integer $projectId
+     *
+     * @throws NotFoundException
+     *
+     * @return string
+     */
     public function view($projectId)
     {
-        $branch = $this->getParam('branch', '');
+        $branch      = $this->getParam('branch', '');
         $environment = $this->getParam('environment', '');
-        $project = $this->projectStore->getById($projectId);
+        $page        = (integer)$this->getParam('page', 1);
+        $project     = $this->projectStore->getById($projectId);
 
         if (empty($project)) {
             throw new NotFoundException(Lang::get('project_x_not_found', $projectId));
         }
 
-        $perPage = $_SESSION['php-censor-user']->getFinalPerPage();
-        $page     = $this->getParam('p', 1);
-        $builds   = $this->getLatestBuildsHtml($projectId, urldecode($environment), urlencode($branch), (($page - 1) * $perPage), $perPage);
+        $perPage  = $_SESSION['php-censor-user']->getFinalPerPage();
+        $builds   = $this->getLatestBuildsHtml($projectId, $environment, $branch, (($page - 1) * $perPage), $perPage);
         $pages    = $builds[1] == 0 ? 1 : ceil($builds[1] / $perPage);
 
         if ($page > $pages) {
             $response = new b8\Http\Response\RedirectResponse();
-            $response->setHeader('Location', APP_URL.'project/view/'.$projectId);
+            $response->setHeader('Location', APP_URL . 'project/view/' . $projectId);
+
             return $response;
         }
 
-        $this->view->builds   = $builds[0];
-        $this->view->total    = $builds[1];
-        $this->view->project  = $project;
-        $this->view->branch   = urldecode($branch);
-        $this->view->branches = $this->projectStore->getKnownBranches($projectId);
-        $this->view->environment = urldecode($environment);
+        $this->view->builds       = $builds[0];
+        $this->view->total        = $builds[1];
+        $this->view->project      = $project;
+        $this->view->branch       = urldecode($branch);
+        $this->view->branches     = $this->projectStore->getKnownBranches($projectId);
+        $this->view->environment  = urldecode($environment);
         $this->view->environments = $project->getEnvironmentsNames();
-        $this->view->page     = $page;
-        $this->view->pages    = $pages;
-        $this->view->perPage  = $perPage;
+        $this->view->page         = $page;
+        $this->view->pages        = $pages;
+        $this->view->perPage      = $perPage;
 
         $this->layout->title    = $project->getTitle();
+        $this->layout->subtitle = '';
+
         if (!empty($this->view->environment)) {
-            $this->layout->subtitle = $this->view->environment;
-        } else {
-            $this->layout->subtitle = $this->view->branch;
+            $this->layout->subtitle = '<i class="fa fa-gear"></i> ' . $this->view->environment;
+        } elseif (!empty($this->view->branch)) {
+            $this->layout->subtitle = '<i class="fa fa-code-fork"></i> ' . $this->view->branch;
         }
 
         return $this->view->render();
     }
 
     /**
-    * Create a new pending build for a project.
-    */
-    public function build($projectId, $type = null, $id = null)
+     * Create a new pending build for a project.
+     * 
+     * @param integer $projectId
+     *
+     * @throws NotFoundException
+     *
+     * @return b8\Http\Response\RedirectResponse
+     *
+     */
+    public function build($projectId)
     {
         /* @var \PHPCensor\Model\Project $project */
         $project = $this->projectStore->getById($projectId);
+        if (empty($project) || $project->getArchived()) {
+            throw new NotFoundException(Lang::get('project_x_not_found', $projectId));
+        }
+        
+        $type  = $this->getParam('type', 'branch');
+        $id    = $this->getParam('id');
+        $debug = (boolean)$this->getParam('debug', false);
 
         $environment = null;
-        $branch = null;
+        $branch      = null;
+
         switch($type) {
             case 'environment':
                 $environment = $id;
@@ -120,12 +163,8 @@ class ProjectController extends PHPCensor\Controller
             $branch = $project->getBranch();
         }
 
-        if (empty($project) || $project->getArchived()) {
-            throw new NotFoundException(Lang::get('project_x_not_found', $projectId));
-        }
-
-        $debug = (boolean)$this->getParam('debug', false);
         $extra = null;
+
         if ($debug && $this->currentUserIsAdmin()) {
             $extra = [
                 'debug' => true,
@@ -133,7 +172,16 @@ class ProjectController extends PHPCensor\Controller
         }
 
         $email = $_SESSION['php-censor-user']->getEmail();
-        $build = $this->buildService->createBuild($project, $environment, null, urldecode($branch), $email, null, $extra);
+        $build = $this->buildService->createBuild(
+            $project,
+            $environment,
+            null,
+            $branch,
+            null,
+            $email,
+            null,
+            $extra
+        );
 
         if ($this->buildService->queueError) {
             $_SESSION['global_error'] = Lang::get('add_to_queue_failed');
@@ -141,6 +189,7 @@ class ProjectController extends PHPCensor\Controller
 
         $response = new b8\Http\Response\RedirectResponse();
         $response->setHeader('Location', APP_URL.'build/view/' . $build->getId());
+
         return $response;
     }
 
@@ -156,6 +205,7 @@ class ProjectController extends PHPCensor\Controller
 
         $response = new b8\Http\Response\RedirectResponse();
         $response->setHeader('Location', APP_URL);
+
         return $response;
     }
 
@@ -173,9 +223,11 @@ class ProjectController extends PHPCensor\Controller
     protected function getLatestBuildsHtml($projectId, $environment = '', $branch = '', $start = 0, $perPage = 10)
     {
         $criteria = ['project_id' => $projectId];
+
         if (!empty($environment)) {
             $criteria['environment'] = $environment;
         }
+
         if (!empty($branch)) {
             $criteria['branch'] = $branch;
         }
@@ -230,18 +282,18 @@ class ProjectController extends PHPCensor\Controller
         $this->layout->title = Lang::get('add_project');
         $this->requireAdmin();
 
-        $method = $this->request->getMethod();
-
-        $pub = null;
-        $values = $this->getParams();
+        $method           = $this->request->getMethod();
+        $pub              = null;
+        $values           = $this->getParams();
+        $values['branch'] = '';
 
         if ($method != 'POST') {
             $sshKey = new SshKey();
-            $key = $sshKey->generate();
+            $key    = $sshKey->generate();
 
             $values['key']    = $key['private_key'];
             $values['pubkey'] = $key['public_key'];
-            $pub = $key['public_key'];
+            $pub              = $key['public_key'];
         }
 
         $form = $this->projectForm($values);
@@ -285,20 +337,19 @@ class ProjectController extends PHPCensor\Controller
     {
         $this->requireAdmin();
 
-        $method = $this->request->getMethod();
+        $method  = $this->request->getMethod();
         $project = $this->projectStore->getById($projectId);
 
         if (empty($project)) {
             throw new NotFoundException(Lang::get('project_x_not_found', $projectId));
         }
 
-        $this->layout->title = $project->getTitle();
+        $this->layout->title    = $project->getTitle();
         $this->layout->subtitle = Lang::get('edit_project');
 
-        $values = $project->getDataArray();
-        $values['key'] = $values['ssh_private_key'];
-        $values['pubkey'] = $values['ssh_public_key'];
-
+        $values                 = $project->getDataArray();
+        $values['key']          = $values['ssh_private_key'];
+        $values['pubkey']       = $values['ssh_public_key'];
         $values['environments'] = $project->getEnvironments();
 
         if ($values['type'] == 'gitlab') {
@@ -323,9 +374,9 @@ class ProjectController extends PHPCensor\Controller
             return $view->render();
         }
 
-        $title = $this->getParam('title', Lang::get('new_project'));
+        $title     = $this->getParam('title', Lang::get('new_project'));
         $reference = $this->getParam('reference', null);
-        $type = $this->getParam('type', null);
+        $type      = $this->getParam('type', null);
 
         $options = [
             'ssh_private_key'     => $this->getParam('key', null),
@@ -352,8 +403,10 @@ class ProjectController extends PHPCensor\Controller
     protected function projectForm($values, $type = 'add')
     {
         $form = new Form();
+
         $form->setMethod('POST');
         $form->setAction(APP_URL.'project/' . $type);
+
         $form->addField(new Form\Element\Csrf('csrf'));
         $form->addField(new Form\Element\Hidden('pubkey'));
 
@@ -393,6 +446,10 @@ class ProjectController extends PHPCensor\Controller
         $field->setClass('form-control')->setContainerClass('form-group');
         $form->addField($field);
 
+        $field = Form\Element\Text::create('branch', Lang::get('default_branch'), false);
+        $field->setClass('form-control')->setContainerClass('form-group')->setValue('');
+        $form->addField($field);
+
         $field = Form\Element\TextArea::create('key', Lang::get('project_private_key'), false);
         $field->setClass('form-control')->setContainerClass('form-group');
         $field->setRows(6);
@@ -401,10 +458,6 @@ class ProjectController extends PHPCensor\Controller
         $field = Form\Element\TextArea::create('build_config', Lang::get('build_config'), false);
         $field->setClass('form-control')->setContainerClass('form-group');
         $field->setRows(6);
-        $form->addField($field);
-
-        $field = Form\Element\Text::create('branch', Lang::get('default_branch'), true);
-        $field->setClass('form-control')->setContainerClass('form-group')->setValue('master');
         $form->addField($field);
 
         $field = Form\Element\TextArea::create('environments', Lang::get('environments_label'), false);
@@ -445,6 +498,7 @@ class ProjectController extends PHPCensor\Controller
         $form->addField($field);
 
         $form->setValues($values);
+
         return $form;
     }
 
@@ -493,23 +547,6 @@ class ProjectController extends PHPCensor\Controller
 
             return true;
         };
-    }
-
-    /**
-     * @param int $projectId
-     *
-     * @return b8\Http\Response
-     */
-    public function ajaxBuilds($projectId)
-    {
-        $branch  = $this->getParam('branch', '');
-        $environment  = $this->getParam('environment', '');
-        $perPage = (integer)$this->getParam('per_page', 10);
-        $builds  = $this->getLatestBuildsHtml($projectId, urldecode($environment), urldecode($branch), 0, $perPage);
-
-        $this->response->disableLayout();
-        $this->response->setContent($builds[0]);
-        return $this->response;
     }
 
     /**

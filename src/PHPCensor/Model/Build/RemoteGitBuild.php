@@ -73,7 +73,7 @@ class RemoteGitBuild extends Build
     */
     protected function cloneByHttp(Builder $builder, $cloneTo)
     {
-        $cmd = 'git clone --recursive ';
+        $cmd = 'cd .. && git clone --recursive ';
 
         $depth = $builder->getConfig('clone_depth');
 
@@ -100,7 +100,7 @@ class RemoteGitBuild extends Build
         $gitSshWrapper = $this->writeSshWrapper($cloneTo, $keyFile);
 
         // Do the git clone:
-        $cmd = 'git clone --recursive ';
+        $cmd = 'cd .. && git clone --recursive ';
 
         $depth = $builder->getConfig('clone_depth');
 
@@ -114,7 +114,11 @@ class RemoteGitBuild extends Build
         $success = $builder->executeCommand($cmd, $this->getBranch(), $this->getCloneUrl(), $cloneTo);
 
         if ($success) {
-            $success = $this->postCloneSetup($builder, $cloneTo);
+            $extra = [
+                'git_ssh_wrapper' => $gitSshWrapper
+            ];
+
+            $success = $this->postCloneSetup($builder, $cloneTo, $extra);
         }
 
         // Remove the key file and git wrapper:
@@ -128,9 +132,10 @@ class RemoteGitBuild extends Build
      * Handle any post-clone tasks, like switching branches.
      * @param Builder $builder
      * @param $cloneTo
+     * @param array $extra
      * @return bool
      */
-    protected function postCloneSetup(Builder $builder, $cloneTo)
+    protected function postCloneSetup(Builder $builder, $cloneTo, array $extra = null)
     {
         $success = true;
         $commit  = $this->getCommitId();

@@ -8,14 +8,13 @@ use PHPCensor\Logging\BuildLogger;
 use PHPCensor\Model\Build;
 use b8\Config;
 use b8\Store\Factory;
+use PHPCensor\Store\BuildErrorWriter;
 use Psr\Log\LoggerAwareInterface;
 use Psr\Log\LoggerInterface;
 use Psr\Log\LogLevel;
 use PHPCensor\Plugin\Util\Factory as PluginFactory;
 
 /**
- * PHPCI Build Runner
- * 
  * @author Dan Cryer <dan@block8.co.uk>
  */
 class Builder implements LoggerAwareInterface
@@ -91,6 +90,11 @@ class Builder implements LoggerAwareInterface
     protected $buildLogger;
 
     /**
+     * @var BuildErrorWriter
+     */
+    private $buildErrorWriter;
+
+    /**
      * Set up the builder.
      *
      * @param \PHPCensor\Model\Build $build
@@ -105,7 +109,7 @@ class Builder implements LoggerAwareInterface
         $pluginFactory        = $this->buildPluginFactory($build);
         $this->pluginExecutor = new Plugin\Util\Executor($pluginFactory, $this->buildLogger);
 
-        $executorClass         = 'PHPCensor\Helper\UnixCommandExecutor';
+        $executorClass         = 'PHPCensor\Helper\CommandExecutor';
         $this->commandExecutor = new $executorClass(
             $this->buildLogger,
             ROOT_DIR,
@@ -113,7 +117,8 @@ class Builder implements LoggerAwareInterface
             $this->verbose
         );
 
-        $this->interpolator = new BuildInterpolator();
+        $this->interpolator     = new BuildInterpolator();
+        $this->buildErrorWriter = new BuildErrorWriter($this->build->getId());
     }
 
     /**
@@ -170,8 +175,16 @@ class Builder implements LoggerAwareInterface
      */
     public function execute()
     {
+        // check current status
+        if ($this->build->getStatus() != Build::STATUS_PENDING) {
+            throw new BuilderException('Can`t build - status is not pending', BuilderException::FAIL_START);
+        }
+        // set status only if current status pending
+        if (!$this->build->setStatusSync(Build::STATUS_RUNNING)) {
+            throw new BuilderException('Can`t build - unable change status to running', BuilderException::FAIL_START);
+        }
+
         // Update the build in the database, ping any external services.
-        $this->build->setStatus(Build::STATUS_RUNNING);
         $this->build->setStarted(new \DateTime());
         $this->store->save($this->build);
         $this->build->sendStatusPostback();
@@ -192,6 +205,9 @@ class Builder implements LoggerAwareInterface
             // Run the core plugin stages:
             foreach ([Build::STAGE_SETUP, Build::STAGE_TEST, Build::STAGE_DEPLOY] as $stage) {
                 $success &= $this->pluginExecutor->executePlugins($this->config, $stage);
+                if (!$success) {
+                    break;
+                }
             }
 
             // Set the status so this can be used by complete, success and failure
@@ -201,7 +217,6 @@ class Builder implements LoggerAwareInterface
             } else {
                 $this->build->setStatus(Build::STATUS_FAILED);
             }
-
 
             if ($success) {
                 $this->pluginExecutor->executePlugins($this->config, Build::STAGE_SUCCESS);
@@ -245,6 +260,7 @@ class Builder implements LoggerAwareInterface
             $this->build->removeBuildDirectory();
         }
 
+        $this->buildErrorWriter->flush();
         $this->store->save($this->build);
     }
 
@@ -275,14 +291,18 @@ class Builder implements LoggerAwareInterface
 
     /**
      * Find a binary required by a plugin.
+     *
      * @param string $binary
-     * @param bool $quiet
+     * @param bool   $quiet Returns null instead of throwing an exception.
+     * @param string $priorityPath
      *
      * @return null|string
+     *
+     * @throws \Exception when no binary has been found and $quiet is false.
      */
-    public function findBinary($binary, $quiet = false)
+    public function findBinary($binary, $quiet = false, $priorityPath = 'local')
     {
-        return $this->commandExecutor->findBinary($binary, $quiet);
+        return $this->commandExecutor->findBinary($binary, $quiet, $priorityPath);
     }
 
     /**
@@ -430,5 +450,13 @@ class Builder implements LoggerAwareInterface
         );
 
         return $pluginFactory;
+    }
+
+    /**
+     * @return BuildErrorWriter
+     */
+    public function getBuildErrorWriter()
+    {
+        return $this->buildErrorWriter;
     }
 }

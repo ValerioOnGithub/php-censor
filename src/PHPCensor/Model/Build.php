@@ -20,6 +20,11 @@ class Build extends Model
     const STAGE_FAILURE  = 'failure';
     const STAGE_FIXED    = 'fixed';
     const STAGE_BROKEN   = 'broken';
+    
+    const STATUS_PENDING        = 0;
+    const STATUS_RUNNING        = 1;
+    const STATUS_SUCCESS        = 2;
+    const STATUS_FAILED         = 3;
 
     /**
      * @var array
@@ -46,6 +51,7 @@ class Build extends Model
         'status'          => null,
         'log'             => null,
         'branch'          => null,
+        'tag'             => null,
         'created'         => null,
         'started'         => null,
         'finished'        => null,
@@ -66,6 +72,7 @@ class Build extends Model
         'status'          => 'getStatus',
         'log'             => 'getLog',
         'branch'          => 'getBranch',
+        'tag'             => 'getTag',
         'created'         => 'getCreated',
         'started'         => 'getStarted',
         'finished'        => 'getFinished',
@@ -89,6 +96,7 @@ class Build extends Model
         'status'          => 'setStatus',
         'log'             => 'setLog',
         'branch'          => 'setBranch',
+        'setTag'          => 'setTag',
         'created'         => 'setCreated',
         'started'         => 'setStarted',
         'finished'        => 'setFinished',
@@ -136,6 +144,11 @@ class Build extends Model
             'type'    => 'varchar',
             'length'  => 250,
             'default' => 'master',
+        ],
+        'tag' => [
+            'type'    => 'varchar',
+            'length'  => 250,
+            'default' => null,
         ],
         'created' => [
             'type'     => 'datetime',
@@ -406,6 +419,27 @@ class Build extends Model
     }
 
     /**
+     * Set the value of Status / status only if it synced with db. Must not be null.
+     *
+     * @param $value int
+     * @return bool
+     */
+    public function setStatusSync($value)
+    {
+        $this->validateNotNull('Status', $value);
+        $this->validateInt('Status', $value);
+
+        if ($this->data['status'] !== $value) {
+            $store = Factory::getStore('Build');
+            if ($store->updateStatusSync($this, $value)) {
+                $this->data['status'] = $value;
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
      * Set the value of Log / log.
      *
      * @param $value string
@@ -569,7 +603,6 @@ class Build extends Model
     /**
      * Set the values of Extra / extra.
      *
-     * @param $name string
      * @param $values mixed
      */
     public function setExtraValues($values)
@@ -580,6 +613,26 @@ class Build extends Model
         }
         $extra = array_replace($extra, $values);
         $this->setExtra(json_encode($extra));
+    }
+
+    /**
+     * Return a value from the build's "extra" JSON array.
+     * @param null $key
+     * @return mixed|null|string
+     */
+    public function getExtra($key = null)
+    {
+        $data = json_decode($this->data['extra'], true);
+
+        if (is_null($key)) {
+            $rtn = $data;
+        } elseif (isset($data[$key])) {
+            $rtn = $data[$key];
+        } else {
+            $rtn = null;
+        }
+
+        return $rtn;
     }
 
     /**
@@ -649,11 +702,6 @@ class Build extends Model
         return Factory::getStore('BuildMeta', 'PHPCensor')->getByBuildId($this->getId());
     }
 
-    const STATUS_PENDING = 0;
-    const STATUS_RUNNING = 1;
-    const STATUS_SUCCESS = 2;
-    const STATUS_FAILED  = 3;
-
     public $currentBuildPath;
 
     /**
@@ -673,6 +721,14 @@ class Build extends Model
     }
 
     /**
+     * Get link to tag from another source (i.e. Github)
+     */
+    public function getTagLink()
+    {
+        return '#';
+    }
+
+    /**
      * Return a template to use to generate a link to a specific file.
      *
      * @return null
@@ -687,7 +743,7 @@ class Build extends Model
     */
     public function sendStatusPostback()
     {
-        return;
+        return false;
     }
 
     /**
@@ -801,26 +857,6 @@ class Build extends Model
     }
 
     /**
-     * Return a value from the build's "extra" JSON array.
-     * @param null $key
-     * @return mixed|null|string
-     */
-    public function getExtra($key = null)
-    {
-        $data = json_decode($this->data['extra'], true);
-
-        if (is_null($key)) {
-            $rtn = $data;
-        } elseif (isset($data[$key])) {
-            $rtn = $data[$key];
-        } else {
-            $rtn = null;
-        }
-
-        return $rtn;
-    }
-
-    /**
      * Returns the commit message for this build.
      * @return string
      */
@@ -840,7 +876,6 @@ class Build extends Model
      * @param null $file
      * @param null $lineStart
      * @param null $lineEnd
-     * @return BuildError
      */
     public function reportError(
         Builder $builder,
@@ -851,19 +886,15 @@ class Build extends Model
         $lineStart = null,
         $lineEnd = null
     ) {
-        unset($builder);
-
-        $error = new BuildError();
-        $error->setBuild($this);
-        $error->setCreatedDate(new \DateTime());
-        $error->setPlugin($plugin);
-        $error->setMessage($message);
-        $error->setSeverity($severity);
-        $error->setFile($file);
-        $error->setLineStart($lineStart);
-        $error->setLineEnd($lineEnd);
-
-        return Factory::getStore('BuildError')->save($error);
+        $writer = $builder->getBuildErrorWriter();
+        $writer->write(
+            $plugin,
+            $message,
+            $severity,
+            $file,
+            $lineStart,
+            $lineEnd
+        );
     }
 
     /**
@@ -969,6 +1000,36 @@ class Build extends Model
     public function createWorkingCopy(Builder $builder, $buildPath)
     {
         return false;
+    }
+
+    /**
+     * Get the value of Tag / tag.
+     *
+     * @return string
+     */
+    public function getTag()
+    {
+        $rtn = $this->data['tag'];
+
+        return $rtn;
+    }
+
+    /**
+     * Set the value of Tag / tag.
+     *
+     * @param $value string
+     */
+    public function setTag($value)
+    {
+        $this->validateString('Tag', $value);
+
+        if ($this->data['tag'] === $value) {
+            return;
+        }
+
+        $this->data['tag'] = $value;
+
+        $this->setModified('tag');
     }
 
     /**

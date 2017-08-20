@@ -38,7 +38,7 @@ var PHPCensor = {
 
     getProjectBuilds: function () {
         $.ajax({
-            url: APP_URL + 'project/ajax-builds/' + PROJECT_ID + '?branch=' + PROJECT_BRANCH + '&environment=' + PROJECT_ENVIRONMENT + '&per_page=' + PER_PAGE,
+            url: APP_URL + 'project/ajax-builds/' + PROJECT_ID + '?branch=' + PROJECT_BRANCH + '&environment=' + PROJECT_ENVIRONMENT + '&per_page=' + PER_PAGE + '&page=' + PAGE,
 
             success: function (data) {
                 $('#latest-builds').html(data);
@@ -432,8 +432,7 @@ function setupProjectForm()
         $('#element-reference').trigger('change');
     });
 
-    $('#element-github').change(function()
-    {
+    $('#element-github').change(function() {
         var val = $('#element-github').val();
 
         if(val != 'choose') {
@@ -443,11 +442,9 @@ function setupProjectForm()
             $('label[for=element-reference]').hide();
             $('label[for=element-type]').hide();
             $('#element-reference').hide();
-            $('#element-type').hide();
             $('#element-token').val(window.github_token);
             $('#element-title').val(val);
-        }
-        else {
+        } else {
             $('label[for=element-reference]').show();
             $('label[for=element-type]').show();
             $('#element-reference').show();

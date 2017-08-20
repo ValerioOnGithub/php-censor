@@ -14,29 +14,48 @@
                     <tr>
                         <th><?php Lang::out('project'); ?></th>
                         <td style="text-align: right">
-                            <a href="<?php print APP_URL . 'project/view/' . $build->getProjectId(); ?>">
-                                <i class="fa fa-<?php print $build->getProject()->getIcon(); ?>"></i>
-                                <?php print $build->getProject()->getTitle(); ?>
+                            <a href="<?= APP_URL . 'project/view/' . $build->getProjectId(); ?>">
+                                <i class="fa fa-<?= $build->getProject()->getIcon(); ?>"></i>
+                                <?= $build->getProject()->getTitle(); ?>
                             </a>
+                        </td>
+                    </tr>
+
+                    <tr>
+                        <th><?php Lang::out('branch'); ?></th>
+                        <td style="text-align: right">
+                            <a target="_blank" href="<?= $build->getBranchLink(); ?>">
+                                <i class="fa fa-code-fork"></i> <?= $build->getBranch(); ?>
+                            </a>
+                            <?php if ($tag = $build->getTag()): ?> / 
+                                <a target="_blank" href="<?= $build->getTagLink(); ?>">
+                                    <i class="fa fa-tag"></i> <?= $tag; ?>
+                                </a>
+                            <?php endif; ?>
                         </td>
                     </tr>
 
                     <tr>
                         <th><?php Lang::out('environment'); ?></th>
                         <td style="text-align: right">
-                            <span class="label label-default"><?php print $build->getEnvironment(); ?></span>
+                            <?php
+                                $environment = $build->getEnvironment();
+                                echo !empty($environment) ? ('<i class="fa fa-gear"> ' . $environment) : '—' ;
+                            ?>
                         </td>
                     </tr>
 
                     <tr>
                         <th><?php Lang::out('merged_branches'); ?></th>
                         <td style="text-align: right">
-                            <span class="label label-default"><?php print $build->getBranch() ?></span>
+                            <a target="_blank" href="<?= $build->getBranchLink(); ?>">
+                                <i class="fa fa-code-fork"></i> <?= $build->getBranch(); ?>
+                            </a>
                             + <?php
                             $branches = $build->getExtra('branches');
                             if (!empty($branches)) {
                                 foreach($branches as $branch) {
-                                    ?><span class="label label-default"><?php print $branch ?></span><?php
+                                    ?><i class="fa fa-code-fork"></i> <?php print $branch ?><?php
                                 }
                             } else {
                                 ?>&mdash;<?php
@@ -60,15 +79,6 @@
             <div class="box-body no-padding">
                 <table class="table">
                     <tr>
-                        <th><?php Lang::out('branch'); ?></th>
-                        <td style="text-align: right">
-                            <a target="_blank" href="<?php print $build->getBranchLink(); ?>">
-                                <span class="label label-default"><?php print $build->getBranch(); ?></span>
-                            </a>
-                        </td>
-                    </tr>
-
-                    <tr>
                         <th><?php Lang::out('commit'); ?></th>
                         <td style="text-align: right">
                             <a target="_blank" href="<?php print $build->getCommitLink(); ?>">
@@ -85,7 +95,8 @@
                     </tr>
 
                     <tr>
-                        <td colspan="2">
+                        <th><?php Lang::out('commit_message'); ?></th>
+                        <td style="text-align: right">
                             <?php print $build->getCommitMessage(); ?>
                         </td>
                     </tr>
@@ -160,7 +171,7 @@
 
     <div class="tab-content">
         <div class="tab-pane active" id="log">
-            <pre style="overflow-y: visible;"><?php print $data['log']; ?></pre>
+            <pre style="overflow-y: visible; white-space: pre-wrap"><?php print $data['log']; ?></pre>
         </div>
 
         <div class="tab-pane" id="errors">

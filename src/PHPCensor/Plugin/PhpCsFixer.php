@@ -13,11 +13,14 @@ use PHPCensor\Plugin;
  */
 class PhpCsFixer extends Plugin
 {
-    protected $workingDir = '';
-    protected $level      = ' --level=psr2';
-    protected $verbose    = '';
-    protected $diff       = '';
-    protected $levels     = ['psr0', 'psr1', 'psr2', 'symfony'];
+    protected $directory = null;
+    protected $args      = '';
+    
+    protected $config    = false;
+    protected $configs   = [
+        '.php_cs',
+        '.php_cs.dist',
+    ];
 
     /**
      * @return string
@@ -34,50 +37,62 @@ class PhpCsFixer extends Plugin
     {
         parent::__construct($builder, $build, $options);
 
-        $this->workingDir = $this->builder->buildPath;
-        $this->buildArgs($options);
+        if (!empty($options['args'])) {
+            $this->args = $options['args'];
+        }
+
+        if (isset($options['verbose']) && $options['verbose']) {
+            $this->args .= ' --verbose';
+        }
+
+        if (isset($options['diff']) && $options['diff']) {
+            $this->args .= ' --diff';
+        }
+
+        if (isset($options['rules']) && $options['rules']) {
+            $this->args .= ' --rules=' . $options['rules'];
+        }
+
+        if (isset($options['config']) && $options['config']) {
+            $this->config = true;
+            $this->args   .= ' --config=' . $builder->interpolate($options['config']);
+        }
+
+        if (isset($options['directory']) && $options['directory']) {
+            $this->directory = $builder->interpolate($options['directory']);
+        }
     }
 
     /**
      * Run PHP CS Fixer.
-     * @return bool
+     *
+     * @return boolean
      */
     public function execute()
     {
-        $curdir = getcwd();
-        chdir($this->workingDir);
+        $directory = '';
+        if (!empty($this->directory)) {
+            $directory = $this->directory;
+        }
 
-        $phpcsfixer = $this->builder->findBinary('php-cs-fixer');
+        if (!$this->config) {
+            foreach ($this->configs as $config) {
+                if (file_exists($this->builder->buildPath . '/' . $config)) {
+                    $this->config = true;
+                    $this->args   .= ' --config=./' . $config;
+                    break;
+                }
+            }
+        }
 
-        $cmd = $phpcsfixer . ' fix . %s %s %s';
-        $success = $this->builder->executeCommand($cmd, $this->verbose, $this->diff, $this->level);
+        if (!$this->config && !$directory) {
+            $directory = '.';
+        }
 
-        chdir($curdir);
+        $phpCsFixer = $this->findBinary('php-cs-fixer');
+        $cmd        = $phpCsFixer . ' fix ' . $directory . ' %s';
+        $success    = $this->builder->executeCommand($cmd, $this->args);
 
         return $success;
-    }
-
-    /**
-     * Build an args string for PHPCS Fixer.
-     * @param $options
-     */
-    public function buildArgs($options)
-    {
-        if (isset($options['verbose']) && $options['verbose']) {
-            $this->verbose = ' --verbose';
-        }
-
-        if (isset($options['diff']) && $options['diff']) {
-            $this->diff = ' --diff';
-        }
-
-        if (isset($options['level']) && in_array($options['level'], $this->levels)) {
-            $this->level = ' --level='.$options['level'];
-        }
-
-        if (isset($options['workingdir']) && $options['workingdir']) {
-            $this->workingDir = $this->builder->buildPath . $options['workingdir'];
-        }
-
     }
 }

@@ -2,8 +2,6 @@
 
 namespace PHPCensor\Worker;
 
-use b8\Config;
-use b8\Database;
 use b8\Store\Factory;
 use Monolog\Logger;
 use Pheanstalk\Job;
@@ -94,39 +92,31 @@ class BuildWorker
 
             $this->logger->addInfo('Received build #'.$jobData['build_id'].' from Beanstalkd');
 
-            // If the job comes with config data, reset our config and database connections
-            // and then make sure we kill the worker afterwards:
-            if (!empty($jobData['config'])) {
-                $this->logger->addDebug('Using job-specific config.');
-                $currentConfig = Config::getInstance()->getArray();
-                Database::reset();
-            }
-
             try {
                 $build = BuildFactory::getBuildById($jobData['build_id']);
             } catch (\Exception $ex) {
                 $this->logger->addWarning('Build #' . $jobData['build_id'] . ' does not exist in the database.');
                 $this->pheanstalk->delete($job);
+                continue;
             }
 
-            try {
-                // Logging relevant to this build should be stored
-                // against the build itself.
-                $buildDbLog = new BuildDBLogHandler($build, Logger::INFO);
-                $this->logger->pushHandler($buildDbLog);
+            // Logging relevant to this build should be stored
+            // against the build itself.
+            $buildDbLog = new BuildDBLogHandler($build, Logger::INFO);
+            $this->logger->pushHandler($buildDbLog);
 
+            try {
                 $builder = new Builder($build, $this->logger);
                 $builder->execute();
-
-                // After execution we no longer want to record the information
-                // back to this specific build so the handler should be removed.
-                $this->logger->popHandler();
             } catch (\PDOException $ex) {
                 // If we've caught a PDO Exception, it is probably not the fault of the build, but of a failed
                 // connection or similar. Release the job and kill the worker.
                 $this->run = false;
                 $this->pheanstalk->release($job);
+                unset($job);
             } catch (\Exception $ex) {
+                $this->logger->addError($ex->getMessage());
+
                 $build->setStatus(Build::STATUS_FAILED);
                 $build->setFinished(new \DateTime());
                 $build->setLog($build->getLog() . PHP_EOL . PHP_EOL . $ex->getMessage());
@@ -134,13 +124,16 @@ class BuildWorker
                 $build->sendStatusPostback();
             }
 
-            // Reset the config back to how it was prior to running this job:
-            if (!empty($currentConfig)) {
-                Database::reset();
-            }
+            // After execution we no longer want to record the information
+            // back to this specific build so the handler should be removed.
+            $this->logger->popHandler();
+            // destructor implicitly call flush
+            unset($buildDbLog);
 
             // Delete the job when we're done:
-            $this->pheanstalk->delete($job);
+            if (!empty($job)) {
+                $this->pheanstalk->delete($job);
+            }
         }
     }
 

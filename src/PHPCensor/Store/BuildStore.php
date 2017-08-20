@@ -177,14 +177,17 @@ class BuildStore extends Store
 
     /**
      * Return an array of builds for a given project and commit ID.
-     * @param $projectId
-     * @param $commitId
+     * 
+     * @param integer $projectId
+     * @param string  $commitId
+     * 
      * @return array
      */
     public function getByProjectAndCommit($projectId, $commitId)
     {
         $query = 'SELECT * FROM {{build}} WHERE {{project_id}} = :project_id AND {{commit_id}} = :commit_id';
-        $stmt = Database::getConnection('read')->prepareCommon($query);
+        $stmt  = Database::getConnection('read')->prepareCommon($query);
+
         $stmt->bindValue(':project_id', $projectId);
         $stmt->bindValue(':commit_id', $commitId);
 
@@ -307,6 +310,26 @@ class BuildStore extends Store
         if ($stmt->execute()) {
             return true;
         } else {
+            return false;
+        }
+    }
+
+    /**
+     * Update status only if it synced with db
+     * @param Build $build
+     * @param int $status
+     * @return bool
+     */
+    public function updateStatusSync($build, $status)
+    {
+        try {
+            $query = 'UPDATE {{build}} SET status = :status_new WHERE {{id}} = :id AND {{status}} = :status_current';
+            $stmt = Database::getConnection('write')->prepareCommon($query);
+            $stmt->bindValue(':id', $build->getId(), \PDO::PARAM_INT);
+            $stmt->bindValue(':status_current', $build->getStatus(), \PDO::PARAM_INT);
+            $stmt->bindValue(':status_new', $status, \PDO::PARAM_INT);
+            return ($stmt->execute() && ($stmt->rowCount() == 1));
+        } catch (\Exception $e) {
             return false;
         }
     }

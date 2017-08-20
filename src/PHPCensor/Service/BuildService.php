@@ -34,13 +34,15 @@ class BuildService
     }
 
     /**
-     * @param Project $project
-     * @param string $environment
+     * @param Project     $project
+     * @param string      $environment
      * @param string|null $commitId
      * @param string|null $branch
+     * @param string|null $tag
      * @param string|null $committerEmail
      * @param string|null $commitMessage
      * @param string|null $extra
+     * 
      * @return \PHPCensor\Model\Build
      */
     public function createBuild(
@@ -48,6 +50,7 @@ class BuildService
         $environment,
         $commitId = null,
         $branch = null,
+        $tag = null,
         $committerEmail = null,
         $commitMessage = null,
         $extra = null
@@ -55,30 +58,34 @@ class BuildService
         $build = new Build();
         $build->setCreated(new \DateTime());
         $build->setProject($project);
-        $build->setStatus(0);
+        $build->setStatus(Build::STATUS_PENDING);
         $build->setEnvironment($environment);
 
         $branches = $project->getBranchesByEnvironment($environment);
         $build->setExtraValue('branches', $branches);
 
-        if (!is_null($commitId)) {
+        if (!empty($commitId)) {
             $build->setCommitId($commitId);
         } else {
             $build->setCommitId('Manual');
             $build->setCommitMessage('Manual');
         }
 
-        if (!is_null($branch)) {
+        if (!empty($branch)) {
             $build->setBranch($branch);
         } else {
             $build->setBranch($project->getBranch());
         }
 
-        if (!is_null($committerEmail)) {
+        if (!empty($tag)) {
+            $build->setTag($tag);
+        }
+
+        if (!empty($committerEmail)) {
             $build->setCommitterEmail($committerEmail);
         }
 
-        if (!is_null($commitMessage)) {
+        if (!empty($commitMessage)) {
             $build->setCommitMessage($commitMessage);
         }
 
@@ -86,6 +93,7 @@ class BuildService
             $build->setExtraValues($extra);
         }
 
+        /** @var Build $build */
         $build = $this->buildStore->save($build);
 
         $buildId = $build->getId();
@@ -117,8 +125,9 @@ class BuildService
         $build = new Build();
         $build->setValues($data);
         $build->setCreated(new \DateTime());
-        $build->setStatus(0);
+        $build->setStatus(Build::STATUS_PENDING);
 
+        /** @var Build $build */
         $build = $this->buildStore->save($build);
 
         $buildId = $build->getId();
@@ -164,10 +173,6 @@ class BuildService
                     'type'     => 'php-censor.build',
                     'build_id' => $build->getId(),
                 ];
-
-                if ($config->get('using_custom_file')) {
-                    $jobData['config'] = $config->getArray();
-                }
 
                 $pheanstalk = new Pheanstalk($settings['host']);
                 $pheanstalk->useTube($settings['name']);

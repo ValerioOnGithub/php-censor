@@ -2,9 +2,8 @@ var SummaryPlugin = ActiveBuild.UiPlugin.extend({
     id: 'build-summary',
     css: 'col-xs-12',
     title: Lang.get('build-summary'),
-    box: true,
-    statusLabels: [ Lang.get('pending'), Lang.get('running'), Lang.get('success'), Lang.get('failed') ],
-    statusClasses: ['info', 'warning', 'success', 'danger'],
+    statusLabels: [Lang.get('pending'), Lang.get('running'), Lang.get('success'), Lang.get('failed'), Lang.get('failed_allowed')],
+    statusClasses: ['info', 'warning', 'success', 'danger', 'danger'],
 
     register: function() {
         var self = this;

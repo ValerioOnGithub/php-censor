@@ -1,15 +1,16 @@
-[![PHPCensor](http://phpci.corpsee.com/build-status/image/9?branch=master&label=PHPCensor&style=flat-square)](http://phpci.corpsee.com/build-status/view/9?branch=master)
-[![TravisCI](https://img.shields.io/travis/corpsee/php-censor/master.svg?label=TravisCI&style=flat-square)](https://travis-ci.org/corpsee/php-censor?branch=master)
+[![PHP Censor](http://ci.php-censor.info/build-status/image/2?branch=master&label=PHPCensor&style=flat-square)](http://ci.php-censor.info/build-status/view/2?branch=master)
+[![Travis CI](https://img.shields.io/travis/corpsee/php-censor/master.svg?label=TravisCI&style=flat-square)](https://travis-ci.org/corpsee/php-censor?branch=master)
 [![Latest Version](https://img.shields.io/packagist/v/corpsee/php-censor.svg?label=Version&style=flat-square)](https://packagist.org/packages/corpsee/php-censor)
 [![Total downloads](https://img.shields.io/packagist/dt/corpsee/php-censor.svg?label=Downloads&style=flat-square)](https://packagist.org/packages/corpsee/php-censor)
 [![License](https://img.shields.io/packagist/l/corpsee/php-censor.svg?label=License&style=flat-square)](https://packagist.org/packages/corpsee/php-censor)
 [![SensioLabs Insight](https://img.shields.io/sensiolabs/i/26f28bee-a861-45b2-bc18-ed2ac7defd22.svg?label=Insight&style=flat-square)](https://insight.sensiolabs.com/projects/26f28bee-a861-45b2-bc18-ed2ac7defd22)
 
-PHP Censor
-==========
+<p align="center">
+    <img width="500" height="auto" src="docs/images/php-censor-black.png" alt="PHP Censor" />
+</p>
 
-**PHP Censor** is a open source self-hosted continuous integration server for PHP projects (Fork of 
-[PHPCI](https://www.phptesting.org)).
+**PHP Censor** is a open source self-hosted continuous integration server for PHP projects 
+([PHPCI](https://www.phptesting.org) fork).
 
 [![Dashboard](docs/screenshots/dashboard.png)](docs/screenshots/dashboard.png)
 
@@ -44,17 +45,17 @@ Features
 
 * Clone project from Github, Bitbucket, Gitlab, Git, Mercurial, SVN or from local directory;
 
-* Set up and tear down database tests for [PostgreSQL](docs/plugins/pgsql.md), [MySQL](docs/plugins/mysql.md) or 
-[SQLite](docs/plugins/sqlite.md);
+* Set up and tear down database tests for [PostgreSQL](docs/en/plugins/pgsql.md), [MySQL](docs/en/plugins/mysql.md) or 
+[SQLite](docs/en/plugins/sqlite.md);
 
-* Install [Composer](docs/plugins/composer.md) dependencies;
+* Install [Composer](docs/en/plugins/composer.md) dependencies;
 
 * Run tests for PHPUnit, Atoum, Behat, Codeception and PHPSpec;
 
 * Check code via Lint, PHPParallelLint, Pdepend, PHPCodeSniffer, PHPCpd, PHPCsFixer, PHPDocblockChecker, PHPLoc, 
 PHPMessDetect, PHPTalLint and TechnicalDept;
 
-* Run through any combination of the other [supported plugins](docs/en/README.md), including Campfire, CleanBuild, 
+* Run through any combination of the other [supported plugins](docs/en/README.md#plugins), including Campfire, CleanBuild, 
 CopyBuild, Deployer, Env, Git, Grunt, Gulp, PackageBuild, Phar, Phing, Shell and Wipe;
 
 * Send notifications on Email, XMPP, Slack, IRC, Flowdock, HipChat and [Telegram](https://github.com/LEXASOFT/PHP-Censor-Telegram-Plugin);

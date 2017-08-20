@@ -1,6 +1,118 @@
 Change Log
 ==========
 
+## [PHP Censor v0.16.0](https://github.com/corpsee/php-censor/tree/0.16.0) (2017-07-16)
+
+[Full Changelog](https://github.com/corpsee/php-censor/compare/0.15.0...0.16.0)
+
+* **Removed HttpClient class and changed it to Guzzle library.**
+* **Added config option `php-censor.build.writer_buffer_size` for configuring `BuildErrorWriter->buffer_size` 
+property (Count of inserts in the one SQL query).** Default value: 500. Thanks to 
+[@LEXASOFT](https://github.com/LEXASOFT) for the idea.
+* Added params 'email' and 'message' for `php-censor:create-build` console command. Thanks to 
+[@SimonHeimberg](https://github.com/SimonHeimberg). 
+PullRequest [#92](https://github.com/corpsee/php-censor/pull/92).
+* Fixed project create/edit form fields order.
+* Fixed debug mode for 'Build now' button.
+* Fixed `FileLink` for builds (Link to branch -> link to commit). Thanks to 
+[@SimonHeimberg](https://github.com/SimonHeimberg). PullRequest [#90](https://github.com/corpsee/php-censor/pull/90).
+* Fixed error in `sendStatusPostback` in the build.
+* Fixed build_meta.meta_value column type (`TEXT` -> `LONGTEXT`) for MySQL. Issue 
+[#94](https://github.com/corpsee/php-censor/issues/94).
+* Improved build log build directory appearence ('/' -> './'). Thanks to 
+[@SimonHeimberg](https://github.com/SimonHeimberg). PullRequest [#93](https://github.com/corpsee/php-censor/pull/93).
+* Improved documentation. Thanks to [@SimonHeimberg](https://github.com/SimonHeimberg). PullRequest 
+[#83](https://github.com/corpsee/php-censor/pull/83), [#84](https://github.com/corpsee/php-censor/pull/84), 
+[#96](https://github.com/corpsee/php-censor/pull/96). Issue [#2](https://github.com/corpsee/php-censor/issues/2).
+* Improved email address format for notifications (Field 'from').
+* Updated dependencies. Issue [#79](https://github.com/corpsee/php-censor/issues/79).
+
+
+## [PHP Censor v0.15.0](https://github.com/corpsee/php-censor/tree/0.15.0) (2017-06-10)
+
+[Full Changelog](https://github.com/corpsee/php-censor/compare/0.14.0...0.15.0)
+
+* **Removed PollCommand**.
+* **Fixed worker fail with eternal log writing**. Issue [#68](https://github.com/corpsee/php-censor/issues/68).
+* **Fixed bulk error writing error** (`SQLSTATE[HY000]: General error: 7 number of parameters must be between 0 and 
+65535`). Issue [#66](https://github.com/corpsee/php-censor/issues/66).
+* **Fixed PDO PostgreSQL connection without installed `pdo_mysql` extension**. Issue 
+[#73](https://github.com/corpsee/php-censor/issues/73).
+* Fixed `/app` directory in Git repository. Issue [#73](https://github.com/corpsee/php-censor/issues/73).
+* Fixed branches for SVN build. Issue [#65](https://github.com/corpsee/php-censor/issues/65).
+* Fixed PhpCsFixer directory option. Issue [#75](https://github.com/corpsee/php-censor/issues/75).
+* Fixed webhook for GitHub pull requests from private repositories. Thanks to 
+[@StudioMaX](https://github.com/StudioMaX). PullRequest [#76](https://github.com/corpsee/php-censor/pull/76), 
+[#78](https://github.com/corpsee/php-censor/pull/78).
+* Improved logging configuration (Now logging autostart without special config `loggerconfig.php`). Issue 
+[#59](https://github.com/corpsee/php-censor/issues/59).
+* Removed `using_custom_file` application config (`app/config.yml`) option.
+* Improved build-status/view page (Added build links, icons, date etc.). Issue 
+[#23](https://github.com/corpsee/php-censor/issues/23).
+* Improved default branch for SVN (Added ability to set branch full name like `branches/branch-1` or 
+`/branch/branch-2`). Issue [#67](https://github.com/corpsee/php-censor/issues/67).
+
+
+## [PHP Censor v0.14.0](https://github.com/corpsee/php-censor/tree/0.14.0) (2017-05-15)
+
+[Full Changelog](https://github.com/corpsee/php-censor/compare/0.13.0...0.14.0)
+
+* Added text wrap for build log.
+* Fixed build branch in dashboard timeline. Thanks to [@JoolsMcFly](https://github.com/JoolsMcFly). PullRequest 
+[#62](https://github.com/corpsee/php-censor/pull/62).
+* Fixed project clone to working directory in Alpine Linux 3.5. Issue 
+[#61](https://github.com/corpsee/php-censor/issues/61).
+* Fixed environment field in build table.
+* Fixed Database::lastInsertId call for PostgreSQL.
+* Fixed SensioLabs Security Checker warning: squizlabs/php_codesniffer (2.7.1) - Arbitrary shell execution (Updated 
+squizlabs/php_codesniffer).
+* Fixed pagination for environments in project/view page and ajax builds update.
+* Fixed builds for branches with special chars (like '#, /' etc.).
+* **Fixed and refactored plugin PhpCsFixer. Issue [#63](https://github.com/corpsee/php-censor/issues/63).**
+* **Improved webhook for GitHub: builds only one head commit per push**.
+* **Improved webhook for GitHub: added tag build and UI information about tag**.
+* Improved error page.
+* Improved UI and code style.
+
+
+## [PHP Censor v0.13.0](https://github.com/corpsee/php-censor/tree/0.13.0) (2017-04-10)
+
+[Full Changelog](https://github.com/corpsee/php-censor/compare/0.12.0...0.13.0)
+
+* **Added Environments**. Thanks to [@ss-gxp](https://github.com/ss-gxp). PullRequest 
+[#41](https://github.com/corpsee/php-censor/pull/41), [#47](https://github.com/corpsee/php-censor/pull/47), 
+[#52](https://github.com/corpsee/php-censor/pull/52). For details see 
+[documentation](/docs/en/environments.md).
+* **Added write cache for build log (It's increase build speed)**. Thanks to [@ss-gxp](https://github.com/ss-gxp). 
+PullRequest [#45](https://github.com/corpsee/php-censor/pull/45), [#48](https://github.com/corpsee/php-censor/pull/48).
+* **Added write cache for build errors (It's increase build speed)**. Thanks to [@ss-gxp](https://github.com/ss-gxp). 
+Issue [#49](https://github.com/corpsee/php-censor/issues/49). PullRequest 
+[#50](https://github.com/corpsee/php-censor/pull/50).
+* **Added SensioLabs Security Checker Plugin** (This plugin is "zero-config" and used in builds without config). 
+Issue [#27](https://github.com/corpsee/php-censor/issues/27). Config example:
+
+```yml
+test:
+  security_checker:
+    allowed_warnings: -1
+```
+
+* Added allowed fail status for plugins (See build summary in the build page).
+* Added `suggest` section to `composer.json`. Issue [#53](https://github.com/corpsee/php-censor/issues/53).
+* Fixed build execution with many workers. Thanks to [@ss-gxp](https://github.com/ss-gxp). PullRequest 
+[#51](https://github.com/corpsee/php-censor/pull/51).
+* Fixed build view (Added html encoding for build errors output). Thanks to [@ss-gxp](https://github.com/ss-gxp). 
+PullRequest [#54](https://github.com/corpsee/php-censor/pull/54).
+* Fixed exception when plugin runs without options (Like "php_parallel_lint: "). Issue 
+[#44](https://github.com/corpsee/php-censor/issues/44).
+* Fixed TechnicalDebt Plugin configuration parameters. Thanks to [@bochkovprivate](https://github.com/bochkovprivate). 
+PullRequest [#55](https://github.com/corpsee/php-censor/pull/55).
+* Fixed PHPCpd plugin documentation. Thanks to [@bochkovprivate](https://github.com/bochkovprivate). PullRequest 
+[#56](https://github.com/corpsee/php-censor/pull/56).
+* Improved plugins code.
+* Improved UI.
+
+
 ## [PHP Censor v0.12.0](https://github.com/corpsee/php-censor/tree/0.12.0) (2017-03-25)
 
 [Full Changelog](https://github.com/corpsee/php-censor/compare/0.11.0...0.12.0)
@@ -242,7 +354,8 @@ php-censor:
 [Full Changelog](https://github.com/corpsee/php-censor/compare/0.4.0...0.5.0)
 
 * Fixed projects archive (Archived projects can not be built and projects moved to the archive section)
-* Added option to the application configuration (`app/config.yml`) to allow/deny removing the build directory after build (`php-censor.build.remove_builds`)
+* Added option to the application configuration (`app/config.yml`) to allow/deny removing the build directory after 
+build (`php-censor.build.remove_builds`)
 
 ```yml
 php-censor:
@@ -250,7 +363,8 @@ php-censor:
     remove_builds: true
 ```
 
-* Added options to the application configuration (`app/config.yml`) to allow/deny sending errors in the commits/pull requests as comments on Github (`php-censor.github.comments.commit` and `php-censor.github.comments.pull_request`)
+* Added options to the application configuration (`app/config.yml`) to allow/deny sending errors in the commits/pull 
+requests as comments on Github (`php-censor.github.comments.commit` and `php-censor.github.comments.pull_request`)
 
 ```yml
 php-censor:

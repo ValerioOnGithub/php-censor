@@ -2,11 +2,11 @@
 
 namespace PHPCensor\Model\Build;
 
+use GuzzleHttp\Client;
 use PHPCensor\Builder;
 use PHPCensor\Helper\Diff;
 use PHPCensor\Helper\Github;
 use b8\Config;
-use b8\HttpClient;
 use PHPCensor\Model\BuildError;
 
 /**
@@ -33,24 +33,32 @@ class GithubBuild extends RemoteGitBuild
     }
 
     /**
+     * Get link to tag from another source (i.e. Github)
+     */
+    public function getTagLink()
+    {
+        return 'https://github.com/' . $this->getProject()->getReference() . '/tree/' . $this->getTag();
+    }
+
+    /**
     * Send status updates to any relevant third parties (i.e. Github)
     */
     public function sendStatusPostback()
     {
+        if ('Manual' === $this->getCommitId()) {
+            return false;
+        }
+
+        $project = $this->getProject();
+        if (empty($project)) {
+            return false;
+        }
+        
         $token = Config::getInstance()->get('php-censor.github.token');
 
         if (empty($token) || empty($this->data['id'])) {
-            return;
+            return false;
         }
-
-        $project    = $this->getProject();
-
-        if (empty($project)) {
-            return;
-        }
-
-        $url    = 'https://api.github.com/repos/'.$project->getReference().'/statuses/'.$this->getCommitId();
-        $http   = new HttpClient();
 
         switch ($this->getStatus()) {
             case 0:
@@ -72,22 +80,24 @@ class GithubBuild extends RemoteGitBuild
                 break;
         }
 
-        $url = Config::getInstance()->get('php-censor.url');
+        $phpCensorUrl = Config::getInstance()->get('php-censor.url');
 
-        $params = [
-            'state'       => $status,
-            'target_url'  => $url . '/build/view/' . $this->getId(),
-            'description' => $description,
-            'context'     => 'PHP Censor',
-        ];
-
-        $headers = [
-            'Authorization: token ' . $token,
-            'Content-Type: application/x-www-form-urlencoded'
-        ];
-
-        $http->setHeaders($headers);
-        $http->request('POST', $url, json_encode($params));
+        $url    = 'https://api.github.com/repos/' . $project->getReference() . '/statuses/' . $this->getCommitId();
+        $client = new Client();
+        $client->post($url, [
+            'headers' => [
+                'Authorization' => 'token ' . $token,
+                'Content-Type'  => 'application/x-www-form-urlencoded'
+            ],
+            'json' => [
+                'state'       => $status,
+                'target_url'  => $phpCensorUrl . '/build/view/' . $this->getId(),
+                'description' => $description,
+                'context'     => 'PHP Censor',
+            ]
+        ]);
+        
+        return true;
     }
 
     /**
@@ -133,18 +143,16 @@ class GithubBuild extends RemoteGitBuild
     public function getFileLinkTemplate()
     {
         $reference = $this->getProject()->getReference();
-        $branch = $this->getBranch();
 
         if ($this->getExtra('build_type') == 'pull_request') {
             $matches = [];
             preg_match('/[\/:]([a-zA-Z0-9_\-]+\/[a-zA-Z0-9_\-]+)/', $this->getExtra('remote_url'), $matches);
 
             $reference = $matches[1];
-            $branch = $this->getExtra('remote_branch');
         }
 
         $link = 'https://github.com/' . $reference . '/';
-        $link .= 'blob/' . $branch . '/';
+        $link .= 'blob/' . $this->getCommitId() . '/';
         $link .= '{FILE}';
         $link .= '#L{LINE}-L{LINE_END}';
 
@@ -155,9 +163,10 @@ class GithubBuild extends RemoteGitBuild
      * Handle any post-clone tasks, like applying a pull request patch on top of the branch.
      * @param Builder $builder
      * @param $cloneTo
+     * @param array $extra
      * @return bool
      */
-    protected function postCloneSetup(Builder $builder, $cloneTo)
+    protected function postCloneSetup(Builder $builder, $cloneTo, array $extra = null)
     {
         $buildType = $this->getExtra('build_type');
 
@@ -165,18 +174,21 @@ class GithubBuild extends RemoteGitBuild
 
         try {
             if (!empty($buildType) && $buildType == 'pull_request') {
-                $remoteUrl = $this->getExtra('remote_url');
-                $remoteBranch = $this->getExtra('remote_branch');
+                $pullRequestId = $this->getExtra('pull_request_number');
 
-                $cmd = 'cd "%s" && git checkout -b php-censor/' . $this->getId() . ' %s && git pull -q --no-edit %s %s';
-                $success = $builder->executeCommand($cmd, $cloneTo, $this->getBranch(), $remoteUrl, $remoteBranch);
+                $cmd = 'cd "%s" && git checkout -b php-censor/' . $this->getId()
+                    . ' %s && git pull -q --no-edit origin pull/%s/head';
+                if (!empty($extra['git_ssh_wrapper'])) {
+                    $cmd = 'export GIT_SSH="'.$extra['git_ssh_wrapper'].'" && ' . $cmd;
+                }
+                $success = $builder->executeCommand($cmd, $cloneTo, $this->getBranch(), $pullRequestId);
             }
         } catch (\Exception $ex) {
             $success = false;
         }
 
         if ($success) {
-            $success = parent::postCloneSetup($builder, $cloneTo);
+            $success = parent::postCloneSetup($builder, $cloneTo, $extra);
         }
 
         return $success;
@@ -222,7 +234,7 @@ class GithubBuild extends RemoteGitBuild
             }
         }
 
-        return parent::reportError($builder, $plugin, $message, $severity, $file, $lineStart, $lineEnd);
+        parent::reportError($builder, $plugin, $message, $severity, $file, $lineStart, $lineEnd);
     }
 
     /**

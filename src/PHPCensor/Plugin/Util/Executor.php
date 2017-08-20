@@ -7,6 +7,7 @@ use Exception;
 use PHPCensor\Helper\Lang;
 use PHPCensor\Logging\BuildLogger;
 use PHPCensor\Model\Build;
+use PHPCensor\Plugin;
 use PHPCensor\Store\BuildStore;
 
 /**
@@ -48,7 +49,7 @@ class Executor
      * 
      * @return bool
      */
-    public function executePlugins(&$config, $stage)
+    public function executePlugins($config, $stage)
     {
         $success          = true;
         $pluginsToExecute = [];
@@ -70,26 +71,54 @@ class Executor
     }
 
     /**
+     * @param array  $config
+     * @param string $branch
+     *
+     * @return bool|array
+     */
+    public function getBranchSpecificConfig($config, $branch)
+    {
+        $configSections = array_keys($config);
+
+        foreach ($configSections as $configSection) {
+            if (0 === strpos($configSection, 'branch-')) {
+                if ($configSection === ('branch-' . $branch)) {
+                    return $config[$configSection];
+                }
+
+                if (0 === strpos($configSection, 'branch-regex:')) {
+                    $pattern = '#' . substr($configSection, 13) . '#u';
+                    preg_match($pattern, $branch, $matches);
+                    if (!empty($matches[0])) {
+                        return $config[$configSection];
+                    }
+                }
+            }
+        }
+
+        return [];
+    }
+
+    /**
      * Check the config for any plugins specific to the branch we're currently building.
-     * @param $config
-     * @param $stage
-     * @param $pluginsToExecute
+     *
+     * @param array  $config
+     * @param string $stage
+     * @param array  $pluginsToExecute
+     *
      * @return array
      */
-    protected function getBranchSpecificPlugins(&$config, $stage, $pluginsToExecute)
+    protected function getBranchSpecificPlugins($config, $stage, $pluginsToExecute)
     {
         /** @var \PHPCensor\Model\Build $build */
-        $build  = $this->pluginFactory->getResourceFor('PHPCensor\Model\Build');
-        $branch = $build->getBranch();
-
-        // If we don't have any branch-specific plugins:
-        if (!isset($config['branch-' . $branch][$stage]) || !is_array($config['branch-' . $branch][$stage])) {
+        $build        = $this->pluginFactory->getResourceFor('PHPCensor\Model\Build');
+        $branch       = $build->getBranch();
+        $branchConfig = $this->getBranchSpecificConfig($config, $branch);
+        if (!$branchConfig) {
             return $pluginsToExecute;
         }
 
-        // If we have branch-specific plugins to execute, add them to the list to be executed:
-        $branchConfig = $config['branch-' . $branch];
-        $plugins = $branchConfig[$stage];
+        $plugins = !empty($branchConfig[$stage]) ? $branchConfig[$stage] : [];
 
         $runOption = 'after';
         if (!empty($branchConfig['run-option'])) {
@@ -138,16 +167,15 @@ class Executor
                 'Stage' . ': ' . ucfirst($stage) . ')'
             );
 
-            $this->setPluginStatus($stage, $plugin, Build::STATUS_RUNNING);
+            $this->setPluginStatus($stage, $plugin, Plugin::STATUS_RUNNING);
 
             // Try and execute it
             if ($this->executePlugin($plugin, $options)) {
                 // Execution was successful
                 $this->logger->logSuccess('PLUGIN: SUCCESS');
-                $this->setPluginStatus($stage, $plugin, Build::STATUS_SUCCESS);
+                $this->setPluginStatus($stage, $plugin, Plugin::STATUS_SUCCESS);
             } else {
-                // Execution failed
-                $this->setPluginStatus($stage, $plugin, Build::STATUS_FAILED);
+                $status = Plugin::STATUS_FAILED;
 
                 if ($stage === Build::STAGE_SETUP) {
                     $this->logger->logFailure('PLUGIN: FAILED');
@@ -164,9 +192,13 @@ class Executor
                         $this->logger->logFailure('PLUGIN: FAILED');
                         $success = false;
                     } else {
+                        $status = Plugin::STATUS_FAILED_ALLOWED;
+
                         $this->logger->logFailure('PLUGIN: FAILED (ALLOWED)');
                     }
                 }
+
+                $this->setPluginStatus($stage, $plugin, $status);
             }
         }
 
@@ -193,7 +225,7 @@ class Executor
 
         try {
             // Build and run it
-            $obj = $this->pluginFactory->buildPlugin($class, $options);
+            $obj = $this->pluginFactory->buildPlugin($class, (is_null($options) ? [] : $options));
 
             return $obj->execute();
         } catch (\Exception $ex) {
@@ -220,9 +252,9 @@ class Executor
 
         $summary[$stage][$plugin]['status'] = $status;
 
-        if ($status === Build::STATUS_RUNNING) {
+        if ($status === Plugin::STATUS_RUNNING) {
             $summary[$stage][$plugin]['started'] = time();
-        } elseif ($status >= Build::STATUS_SUCCESS) {
+        } elseif ($status >= Plugin::STATUS_SUCCESS) {
             $summary[$stage][$plugin]['ended'] = time();
         }
 

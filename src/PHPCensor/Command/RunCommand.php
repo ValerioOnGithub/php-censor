@@ -82,9 +82,9 @@ class RunCommand extends Command
         $this->logger->pushProcessor(new LoggedBuildContextTidier());
         $this->logger->addInfo('Finding builds to process');
         
-        /** @var BuildStore $store */
-        $store  = Factory::getStore('Build');
-        $result = $store->getByStatus(Build::STATUS_PENDING, $this->maxBuilds);
+        /** @var BuildStore $buildStore */
+        $buildStore = Factory::getStore('Build');
+        $result     = $buildStore->getByStatus(Build::STATUS_PENDING, $this->maxBuilds);
 
         $this->logger->addInfo(sprintf('Found %d builds', count($result['items'])));
 
@@ -95,36 +95,39 @@ class RunCommand extends Command
             $build = BuildFactory::getBuild($build);
 
             // Skip build (for now) if there's already a build running in that project:
-            if (in_array($build->getProjectId(), $running)) {
+            if (!empty($running[$build->getProjectId()])) {
                 $this->logger->addInfo(sprintf('Skipping Build %d - Project build already in progress.', $build->getId()));
-                $result['items'][] = $build;
-
-                // Re-run build validator:
-                $running = $this->validateRunningBuilds();
                 continue;
             }
 
             $builds++;
 
-            try {
-                // Logging relevant to this build should be stored
-                // against the build itself.
-                $buildDbLog = new BuildDBLogHandler($build, Logger::INFO);
-                $this->logger->pushHandler($buildDbLog);
+            // Logging relevant to this build should be stored
+            // against the build itself.
+            $buildDbLog = new BuildDBLogHandler($build, Logger::INFO);
+            $this->logger->pushHandler($buildDbLog);
 
+            try {
                 $builder = new Builder($build, $this->logger);
                 $builder->execute();
-
-                // After execution we no longer want to record the information
-                // back to this specific build so the handler should be removed.
-                $this->logger->popHandler();
             } catch (\Exception $ex) {
+                $this->logger->addError($ex->getMessage());
+
                 $build->setStatus(Build::STATUS_FAILED);
                 $build->setFinished(new \DateTime());
                 $build->setLog($build->getLog() . PHP_EOL . PHP_EOL . $ex->getMessage());
-                $store->save($build);
+                $buildStore->save($build);
+                $build->sendStatusPostback();
             }
 
+            // After execution we no longer want to record the information
+            // back to this specific build so the handler should be removed.
+            $this->logger->popHandler();
+            // destructor implicitly call flush
+            unset($buildDbLog);
+
+            // Re-run build validator:
+            $running = $this->validateRunningBuilds();
         }
 
         $this->logger->addInfo('Finished processing builds.');
