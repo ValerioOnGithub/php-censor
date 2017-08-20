@@ -52,6 +52,7 @@ class Build extends Model
         'committer_email' => null,
         'commit_message'  => null,
         'extra'           => null,
+        'environment'     => null,
     ];
 
     /**
@@ -71,6 +72,7 @@ class Build extends Model
         'committer_email' => 'getCommitterEmail',
         'commit_message'  => 'getCommitMessage',
         'extra'           => 'getExtra',
+        'environment'     => 'getEnvironment',
 
         // Foreign key getters:
         'Project' => 'getProject',
@@ -93,6 +95,7 @@ class Build extends Model
         'committer_email' => 'setCommitterEmail',
         'commit_message'  => 'setCommitMessage',
         'extra'           => 'setExtra',
+        'environment'     => 'setEnvironment',
 
         // Foreign key setters:
         'Project' => 'setProject',
@@ -163,6 +166,11 @@ class Build extends Model
         'extra' => [
             'type'     => 'text',
             'nullable' => true,
+            'default'  => null,
+        ],
+        'environment' => [
+            'type'    => 'varchar',
+            'length'  => 250,
             'default'  => null,
         ],
     ];
@@ -540,6 +548,38 @@ class Build extends Model
         $this->data['extra'] = $value;
 
         $this->setModified('extra');
+    }
+
+    /**
+     * Set the value of Extra / extra.
+     *
+     * @param $name string
+     * @param $value mixed
+     */
+    public function setExtraValue($name, $value)
+    {
+        $extra = json_decode($this->data['extra'], true);
+        if ($extra === false) {
+            $extra = [];
+        }
+        $extra[$name] = $value;
+        $this->setExtra(json_encode($extra));
+    }
+
+    /**
+     * Set the values of Extra / extra.
+     *
+     * @param $name string
+     * @param $values mixed
+     */
+    public function setExtraValues($values)
+    {
+        $extra = json_decode($this->data['extra'], true);
+        if ($extra === false) {
+            $extra = [];
+        }
+        $extra = array_replace($extra, $values);
+        $this->setExtra(json_encode($extra));
     }
 
     /**
@@ -929,5 +969,81 @@ class Build extends Model
     public function createWorkingCopy(Builder $builder, $buildPath)
     {
         return false;
+    }
+
+    /**
+     * Get the value of Environment / environment.
+     *
+     * @return string
+     */
+    public function getEnvironment()
+    {
+        $rtn = $this->data['environment'];
+
+        return $rtn;
+    }
+
+    /**
+     * Set the value of Environment / environment.
+     *
+     * @param $value string
+     */
+    public function setEnvironment($value)
+    {
+        $this->validateString('Environment', $value);
+
+        if ($this->data['environment'] === $value) {
+            return;
+        }
+
+        $this->data['environment'] = $value;
+
+        $this->setModified('environment');
+    }
+
+    /**
+     * Create an SSH key file on disk for this build.
+     *
+     * @param  string $cloneTo
+     *
+     * @return string
+     */
+    protected function writeSshKey($cloneTo)
+    {
+        $keyPath = dirname($cloneTo . '/temp');
+        $keyFile = $keyPath . '.key';
+
+        file_put_contents($keyFile, $this->getProject()->getSshPrivateKey());
+        chmod($keyFile, 0600);
+
+        return $keyFile;
+    }
+
+    /**
+     * Create an SSH wrapper script for Svn to use, to disable host key checking, etc.
+     *
+     * @param string $cloneTo
+     * @param string $keyFile
+     *
+     * @return string
+     */
+    protected function writeSshWrapper($cloneTo, $keyFile)
+    {
+        $path        = dirname($cloneTo . '/temp');
+        $wrapperFile = $path . '.sh';
+
+        $sshFlags = '-o CheckHostIP=no -o IdentitiesOnly=yes -o StrictHostKeyChecking=no -o PasswordAuthentication=no';
+
+        // Write out the wrapper script for this build:
+        $script = <<<OUT
+#!/bin/sh
+ssh {$sshFlags} -o IdentityFile={$keyFile} $*
+
+OUT;
+
+        file_put_contents($wrapperFile, $script);
+        shell_exec('chmod +x "' . $wrapperFile . '"');
+
+        return $wrapperFile;
     }
 }
